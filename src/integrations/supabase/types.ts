@@ -14,8 +14,56 @@ export type Database = {
   }
   public: {
     Tables: {
+      automation_tasks: {
+        Row: {
+          attempts: number
+          buyer_username: string | null
+          claimed_at: string | null
+          created_at: string
+          finished_at: string | null
+          id: string
+          order_id: string
+          payload: Json
+          result: string | null
+          status: string
+          task_type: string
+          user_id: string
+        }
+        Insert: {
+          attempts?: number
+          buyer_username?: string | null
+          claimed_at?: string | null
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          order_id: string
+          payload?: Json
+          result?: string | null
+          status?: string
+          task_type: string
+          user_id: string
+        }
+        Update: {
+          attempts?: number
+          buyer_username?: string | null
+          claimed_at?: string | null
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          order_id?: string
+          payload?: Json
+          result?: string | null
+          status?: string
+          task_type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       bot_settings: {
         Row: {
+          agent_last_seen_at: string | null
+          agent_token: string
+          agent_version: string | null
           auto_release: boolean
           binance_api_key: string | null
           binance_api_secret: string | null
@@ -32,6 +80,9 @@ export type Database = {
           webhook_token: string
         }
         Insert: {
+          agent_last_seen_at?: string | null
+          agent_token?: string
+          agent_version?: string | null
           auto_release?: boolean
           binance_api_key?: string | null
           binance_api_secret?: string | null
@@ -48,6 +99,9 @@ export type Database = {
           webhook_token?: string
         }
         Update: {
+          agent_last_seen_at?: string | null
+          agent_token?: string
+          agent_version?: string | null
           auto_release?: boolean
           binance_api_key?: string | null
           binance_api_secret?: string | null
