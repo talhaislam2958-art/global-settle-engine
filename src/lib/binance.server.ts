@@ -1,7 +1,34 @@
 // Server-only Binance C2P (P2P) API helpers. Uses Web Crypto HMAC-SHA256 so it
 // runs inside the edge worker runtime.
+//
+// IMPORTANT (403 fix): api.binance.com sits behind CloudFront, which rejects
+// requests that look like anonymous bots — no User-Agent, no Accept header, or
+// a Content-Type on a GET. Edge-worker fetch sends exactly that shape, which is
+// why signed calls came back as an HTML "403 ERROR / The request could not be
+// satisfied" page instead of JSON. We now send browser-like headers, keep GETs
+// header-clean, and fail over across Binance's mirror hosts when an edge
+// location blocks us.
 
-const BASE = "https://api.binance.com";
+const HOSTS = [
+  "https://api.binance.com",
+  "https://api-gcp.binance.com",
+  "https://api1.binance.com",
+  "https://api2.binance.com",
+  "https://api3.binance.com",
+  "https://api4.binance.com",
+];
+
+const BROWSER_HEADERS: Record<string, string> = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+  Accept: "application/json, text/plain, */*",
+  "Accept-Language": "en-US,en;q=0.9",
+  "Accept-Encoding": "gzip, deflate, br",
+  Referer: "https://www.binance.com/",
+  Origin: "https://www.binance.com",
+  "Cache-Control": "no-cache",
+  Pragma: "no-cache",
+};
 
 async function sign(query: string, secret: string): Promise<string> {
   const key = await crypto.subtle.importKey(
@@ -19,36 +46,72 @@ async function sign(query: string, secret: string): Promise<string> {
 
 export type BinanceCreds = { apiKey: string; apiSecret: string };
 
+function isEdgeBlock(status: number, text: string) {
+  // CloudFront / WAF blocks return HTML, never Binance JSON error codes.
+  return (
+    (status === 403 || status === 401 || status === 405 || status >= 500) &&
+    /<html|The request could not be satisfied|Request blocked|cloudfront/i.test(text)
+  );
+}
+
 async function signedRequest(
   creds: BinanceCreds,
   method: "GET" | "POST",
   path: string,
   params: Record<string, string | number> = {},
-): Promise<{ ok: boolean; status: number; body: any }> {
-  const query = new URLSearchParams({
-    ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])),
-    timestamp: String(Date.now()),
-    recvWindow: "10000",
-  }).toString();
-  const signature = await sign(query, creds.apiSecret);
-  const url = `${BASE}${path}?${query}&signature=${signature}`;
+): Promise<{ ok: boolean; status: number; body: any; blocked?: boolean }> {
+  let last: { ok: boolean; status: number; body: any; blocked?: boolean } = {
+    ok: false,
+    status: 0,
+    body: "No response from Binance.",
+    blocked: true,
+  };
 
-  const res = await fetch(url, {
-    method,
-    headers: {
+  for (const host of HOSTS) {
+    const query = new URLSearchParams({
+      ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])),
+      timestamp: String(Date.now()),
+      recvWindow: "10000",
+    }).toString();
+    const signature = await sign(query, creds.apiSecret);
+    const url = `${host}${path}?${query}&signature=${signature}`;
+
+    const headers: Record<string, string> = {
+      ...BROWSER_HEADERS,
       "X-MBX-APIKEY": creds.apiKey,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-  });
-  const text = await res.text();
-  let body: any = text;
-  try {
-    body = JSON.parse(text);
-  } catch {
-    /* keep raw text */
+    };
+    // Never send a body/Content-Type: everything is signed in the query string.
+    let res: Response;
+    try {
+      res = await fetch(url, { method, headers, redirect: "follow" });
+    } catch (error) {
+      last = { ok: false, status: 0, body: `Network error contacting ${host}: ${String(error)}`, blocked: true };
+      continue;
+    }
+
+    const text = await res.text();
+    if (isEdgeBlock(res.status, text)) {
+      last = {
+        ok: false,
+        status: res.status,
+        body: `Binance edge (${new URL(host).host}) blocked the request.`,
+        blocked: true,
+      };
+      continue; // try the next mirror host
+    }
+
+    let body: any = text;
+    try {
+      body = JSON.parse(text);
+    } catch {
+      /* keep raw text */
+    }
+    return { ok: res.ok, status: res.status, body };
   }
-  return { ok: res.ok, status: res.status, body };
+
+  return last;
 }
+
 
 /** Lightweight credential check. */
 export async function testCredentials(creds: BinanceCreds) {
