@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiPublicHooksPollOrdersRouteImport } from './routes/api/public/hooks/poll-orders'
 import { Route as ApiPublicSmsWebhookRouteImport } from './routes/api/public/sms/webhook'
 
 const IndexRoute = IndexRouteImport.update({
@@ -17,6 +18,12 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicHooksPollOrdersRoute =
+  ApiPublicHooksPollOrdersRouteImport.update({
+    id: '/api/public/hooks/poll-orders',
+    path: '/api/public/hooks/poll-orders',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicSmsWebhookRoute = ApiPublicSmsWebhookRouteImport.update({
   id: '/api/public/sms/webhook',
   path: '/api/public/sms/webhook',
@@ -25,27 +32,35 @@ const ApiPublicSmsWebhookRoute = ApiPublicSmsWebhookRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/public/hooks/poll-orders': typeof ApiPublicHooksPollOrdersRoute
   '/api/public/sms/webhook': typeof ApiPublicSmsWebhookRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/public/hooks/poll-orders': typeof ApiPublicHooksPollOrdersRoute
   '/api/public/sms/webhook': typeof ApiPublicSmsWebhookRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/public/hooks/poll-orders': typeof ApiPublicHooksPollOrdersRoute
   '/api/public/sms/webhook': typeof ApiPublicSmsWebhookRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/public/sms/webhook'
+  fullPaths: '/' | '/api/public/hooks/poll-orders' | '/api/public/sms/webhook'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/public/sms/webhook'
-  id: '__root__' | '/' | '/api/public/sms/webhook'
+  to: '/' | '/api/public/hooks/poll-orders' | '/api/public/sms/webhook'
+  id:
+    | '__root__'
+    | '/'
+    | '/api/public/hooks/poll-orders'
+    | '/api/public/sms/webhook'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiPublicHooksPollOrdersRoute: typeof ApiPublicHooksPollOrdersRoute
   ApiPublicSmsWebhookRoute: typeof ApiPublicSmsWebhookRoute
 }
 
@@ -56,6 +71,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/hooks/poll-orders': {
+      id: '/api/public/hooks/poll-orders'
+      path: '/api/public/hooks/poll-orders'
+      fullPath: '/api/public/hooks/poll-orders'
+      preLoaderRoute: typeof ApiPublicHooksPollOrdersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/sms/webhook': {
@@ -70,6 +92,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiPublicHooksPollOrdersRoute: ApiPublicHooksPollOrdersRoute,
   ApiPublicSmsWebhookRoute: ApiPublicSmsWebhookRoute,
 }
 export const routeTree = rootRouteImport
