@@ -287,11 +287,15 @@ export async function processIncomingSms(
             `⚠️ <b>API release blocked — using browser agent</b>\nOrder: <code>${matched.order_id}</code>\n${rel.message}\nIf the agent is offline, release manually.`,
           );
         }
-
+      }
+    } else {
+      actionTaken = "manual release required";
+      await sendTelegram(
         settings.telegram_bot_token,
         settings.telegram_chat_id,
         `💰 <b>Payment confirmed for Order ${matched.order_id}. Please release USDT manually.</b>\nBuyer: ${matched.buyer_username ?? "-"}\nAmount: ${matched.fiat_amount} ${matched.fiat_currency}`,
       );
+
       await logEvent(settings.user_id, "warning", "manual_release", `Auto-release is OFF — manual release requested for order ${matched.order_id}`);
     }
   } else {
