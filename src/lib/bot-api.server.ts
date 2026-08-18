@@ -26,14 +26,27 @@ export async function ensureSettings(userId: string): Promise<BotSettings> {
 
 export async function loadState(userId: string) {
   const settings = await ensureSettings(userId);
-  const [methods, orders, sms, logs] = await Promise.all([
+  const [methods, orders, sms, logs, tasks] = await Promise.all([
     supabaseAdmin.from("payment_methods").select("*").eq("user_id", userId).order("created_at", { ascending: false }),
     supabaseAdmin.from("orders").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(200),
     supabaseAdmin.from("sms_logs").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(200),
     supabaseAdmin.from("system_logs").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(200),
+    supabaseAdmin
+      .from("automation_tasks")
+      .select("id, task_type, order_id, buyer_username, status, result, attempts, created_at, finished_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(60),
   ]);
 
-  const s = settings as BotSettings & { last_poll_at?: string | null; last_poll_status?: string | null };
+  const s = settings as BotSettings & {
+    last_poll_at?: string | null;
+    last_poll_status?: string | null;
+    agent_token?: string;
+    agent_last_seen_at?: string | null;
+    agent_version?: string | null;
+  };
+  const { agentOnline } = await import("./automation.server");
   return {
     settings: {
       country: s.country,
@@ -46,13 +59,19 @@ export async function loadState(userId: string) {
       webhook_token: s.webhook_token,
       last_poll_at: s.last_poll_at ?? null,
       last_poll_status: s.last_poll_status ?? null,
+      agent_token: s.agent_token ?? "",
+      agent_online: agentOnline(s.agent_last_seen_at),
+      agent_last_seen_at: s.agent_last_seen_at ?? null,
+      agent_version: s.agent_version ?? null,
     },
     payment_methods: methods.data ?? [],
     orders: orders.data ?? [],
     sms_logs: sms.data ?? [],
     system_logs: logs.data ?? [],
+    automation_tasks: tasks.data ?? [],
   };
 }
+
 
 export async function updateSettings(userId: string, patch: Record<string, unknown>) {
   await ensureSettings(userId);

@@ -112,21 +112,36 @@ async function signedRequest(
   return last;
 }
 
-
-/** Lightweight credential check. */
-export async function testCredentials(creds: BinanceCreds) {
-  const res = await signedRequest(creds, "GET", "/sapi/v1/account/status");
-  if (!res.ok) {
-    return {
-      ok: false as const,
-      message:
-        typeof res.body === "object" && res.body?.msg
-          ? `Binance rejected the keys [${res.status}]: ${res.body.msg}`
-          : `Binance request failed [${res.status}]: ${String(res.body).slice(0, 300)}`,
-    };
+function friendlyError(res: { status: number; body: any; blocked?: boolean }, what: string) {
+  if (res.blocked || res.status === 0) {
+    return `${what}: every Binance edge node blocked the request (${res.status || "network error"}). This is a Binance CDN/region block, not a key problem — retry, or run the browser-automation agent which uses your own IP.`;
   }
-  return { ok: true as const, message: "Binance API keys are valid and connected." };
+  const code = typeof res.body === "object" ? res.body?.code : undefined;
+  const msg =
+    typeof res.body === "object"
+      ? res.body?.msg || res.body?.message || JSON.stringify(res.body).slice(0, 300)
+      : String(res.body).slice(0, 300);
+  if (code === -2015 || code === -2014) {
+    return `${what}: Binance rejected the key (${code}). Enable "Reading" permission and either allow unrestricted IPs or whitelist this app's outbound IP.`;
+  }
+  if (code === -1022 || code === -1021) {
+    return `${what}: signature/timestamp rejected (${code}). Re-save your API key and secret — the secret looks truncated or mistyped.`;
+  }
+  return `${what} [${res.status}]: ${msg}`;
 }
+
+/** Lightweight credential check: read-only endpoints only ("Enable Reading"). */
+export async function testCredentials(creds: BinanceCreds) {
+  // /api/v3/account works with read-only keys and is the least-restricted probe.
+  let res = await signedRequest(creds, "GET", "/api/v3/account", { omitZeroBalances: "true" });
+  if (!res.ok) {
+    const fallback = await signedRequest(creds, "GET", "/sapi/v1/account/status");
+    if (fallback.ok) res = fallback;
+    else return { ok: false as const, message: friendlyError(res, "Binance key test failed") };
+  }
+  return { ok: true as const, message: "Binance API keys are valid — reading access confirmed." };
+}
+
 
 export type NormalizedOrder = {
   order_id: string;
@@ -171,12 +186,9 @@ export async function fetchOrders(creds: BinanceCreds): Promise<
     rows: 50,
   });
   if (!res.ok || (typeof res.body === "object" && res.body?.code && res.body.code !== "000000")) {
-    const msg =
-      typeof res.body === "object"
-        ? res.body?.msg || res.body?.message || JSON.stringify(res.body).slice(0, 300)
-        : String(res.body).slice(0, 300);
-    return { ok: false, message: `Binance order fetch failed [${res.status}]: ${msg}` };
+    return { ok: false, message: friendlyError(res, "Binance order fetch failed") };
   }
+
 
   const list: any[] = res.body?.data ?? [];
   const orders = list.map((o) => {
@@ -200,18 +212,15 @@ export async function fetchOrders(creds: BinanceCreds): Promise<
   return { ok: true, orders: orders.filter((o) => o.order_id) };
 }
 
-/** Releases the crypto for a paid P2P order. */
+/** Releases the crypto for a paid P2P order (API path; may be restricted). */
 export async function releaseOrder(creds: BinanceCreds, orderNumber: string) {
   const res = await signedRequest(creds, "POST", "/sapi/v1/c2c/orderMatch/releaseCoin", {
     orderNumber,
   });
   const okBody = typeof res.body === "object" ? res.body?.code === "000000" || res.body?.success === true : false;
   if (!res.ok || !okBody) {
-    const msg =
-      typeof res.body === "object"
-        ? res.body?.msg || res.body?.message || JSON.stringify(res.body).slice(0, 300)
-        : String(res.body).slice(0, 300);
-    return { ok: false as const, message: `Release failed [${res.status}]: ${msg}` };
+    return { ok: false as const, message: friendlyError(res, `Release failed for order ${orderNumber}`) };
   }
+
   return { ok: true as const, message: `USDT released for order ${orderNumber}.` };
 }

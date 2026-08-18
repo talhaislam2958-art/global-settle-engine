@@ -11,6 +11,8 @@ import { OrdersPanel } from "@/components/OrdersPanel";
 import { SmsPanel } from "@/components/SmsPanel";
 import { PaymentMethodsPanel } from "@/components/PaymentMethodsPanel";
 import { LogsPanel } from "@/components/LogsPanel";
+import { AgentPanel } from "@/components/AgentPanel";
+
 import { supabase } from "@/integrations/supabase/client";
 import { getBotState } from "@/lib/bot.functions";
 import type { BotState } from "@/lib/types";
@@ -120,13 +122,16 @@ function Dashboard() {
       </div>
 
       <div className="grid gap-5 xl:grid-cols-2">
+        <AgentPanel settings={state.settings} tasks={state.automation_tasks} />
         <PaymentMethodsPanel
           methods={state.payment_methods}
           country={state.settings.country}
           onChanged={refresh}
         />
-        <LogsPanel logs={state.system_logs} />
       </div>
+
+      <LogsPanel logs={state.system_logs} />
+
     </main>
   );
 }
