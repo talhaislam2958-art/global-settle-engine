@@ -212,18 +212,15 @@ export async function fetchOrders(creds: BinanceCreds): Promise<
   return { ok: true, orders: orders.filter((o) => o.order_id) };
 }
 
-/** Releases the crypto for a paid P2P order. */
+/** Releases the crypto for a paid P2P order (API path; may be restricted). */
 export async function releaseOrder(creds: BinanceCreds, orderNumber: string) {
   const res = await signedRequest(creds, "POST", "/sapi/v1/c2c/orderMatch/releaseCoin", {
     orderNumber,
   });
   const okBody = typeof res.body === "object" ? res.body?.code === "000000" || res.body?.success === true : false;
   if (!res.ok || !okBody) {
-    const msg =
-      typeof res.body === "object"
-        ? res.body?.msg || res.body?.message || JSON.stringify(res.body).slice(0, 300)
-        : String(res.body).slice(0, 300);
-    return { ok: false as const, message: `Release failed [${res.status}]: ${msg}` };
+    return { ok: false as const, message: friendlyError(res, `Release failed for order ${orderNumber}`) };
   }
+
   return { ok: true as const, message: `USDT released for order ${orderNumber}.` };
 }
