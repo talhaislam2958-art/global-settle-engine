@@ -268,18 +268,26 @@ export async function processIncomingSms(
             `✅ <b>USDT released automatically</b>\nOrder: <code>${matched.order_id}</code>\nBuyer: ${matched.buyer_username ?? "-"}\nAmount: ${matched.fiat_amount} ${matched.fiat_currency}`,
           );
         } else {
-          actionTaken = rel.message;
-          await logEvent(settings.user_id, "error", "release", rel.message);
+          // API release is frequently restricted — fall back to the browser agent.
+          const { enqueueTask } = await import("./automation.server");
+          await enqueueTask(settings, "release_usdt", matched.order_id, matched.buyer_username, {
+            api_error: rel.message,
+          });
+          matchStatus = "verified";
+          actionTaken = "queued browser release";
+          await logEvent(
+            settings.user_id,
+            "warning",
+            "release",
+            `API release unavailable (${rel.message}) — queued browser automation for order ${matched.order_id}.`,
+          );
           await sendTelegram(
             settings.telegram_bot_token,
             settings.telegram_chat_id,
-            `❌ <b>Auto-release failed</b>\nOrder: <code>${matched.order_id}</code>\n${rel.message}\nPlease release manually.`,
+            `⚠️ <b>API release blocked — using browser agent</b>\nOrder: <code>${matched.order_id}</code>\n${rel.message}\nIf the agent is offline, release manually.`,
           );
         }
-      }
-    } else {
-      actionTaken = "manual release required";
-      await sendTelegram(
+
         settings.telegram_bot_token,
         settings.telegram_chat_id,
         `💰 <b>Payment confirmed for Order ${matched.order_id}. Please release USDT manually.</b>\nBuyer: ${matched.buyer_username ?? "-"}\nAmount: ${matched.fiat_amount} ${matched.fiat_currency}`,
