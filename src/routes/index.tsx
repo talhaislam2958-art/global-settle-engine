@@ -120,13 +120,16 @@ function Dashboard() {
       </div>
 
       <div className="grid gap-5 xl:grid-cols-2">
+        <AgentPanel settings={state.settings} tasks={state.automation_tasks} />
         <PaymentMethodsPanel
           methods={state.payment_methods}
           country={state.settings.country}
           onChanged={refresh}
         />
-        <LogsPanel logs={state.system_logs} />
       </div>
+
+      <LogsPanel logs={state.system_logs} />
+
     </main>
   );
 }
