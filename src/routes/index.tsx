@@ -11,6 +11,8 @@ import { OrdersPanel } from "@/components/OrdersPanel";
 import { SmsPanel } from "@/components/SmsPanel";
 import { PaymentMethodsPanel } from "@/components/PaymentMethodsPanel";
 import { LogsPanel } from "@/components/LogsPanel";
+import { AgentPanel } from "@/components/AgentPanel";
+
 import { supabase } from "@/integrations/supabase/client";
 import { getBotState } from "@/lib/bot.functions";
 import type { BotState } from "@/lib/types";
