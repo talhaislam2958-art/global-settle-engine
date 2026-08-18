@@ -64,6 +64,22 @@ export type BotStateSettings = {
   webhook_token: string;
   last_poll_at: string | null;
   last_poll_status: string | null;
+  agent_token: string;
+  agent_online: boolean;
+  agent_last_seen_at: string | null;
+  agent_version: string | null;
+};
+
+export type AutomationTaskRow = {
+  id: string;
+  task_type: string;
+  order_id: string;
+  buyer_username: string | null;
+  status: string;
+  result: string | null;
+  attempts: number;
+  created_at: string;
+  finished_at: string | null;
 };
 
 export type BotState = {
@@ -72,4 +88,6 @@ export type BotState = {
   orders: OrderRow[];
   sms_logs: SmsRow[];
   system_logs: LogRow[];
+  automation_tasks: AutomationTaskRow[];
 };
+
