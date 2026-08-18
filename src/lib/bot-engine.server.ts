@@ -95,6 +95,13 @@ export async function syncOrdersForUser(settings: BotSettings) {
         `New ${order.status} order ${order.order_id} from ${order.buyer_username ?? "unknown buyer"} for ${order.fiat_amount} ${order.fiat_currency}`,
       );
       await notifyNewOrder(settings, order.order_id, order.buyer_username, order.fiat_amount, order.fiat_currency, order.status);
+      // Hand the chat message to the browser agent — Binance has no public API
+      // for posting into the P2P chat.
+      if (order.status === "ongoing" || order.status === "paid") {
+        const { queueBankDetails } = await import("./automation.server");
+        await queueBankDetails(settings, order.order_id, order.buyer_username);
+      }
+
     } else if (prev !== order.status) {
       await logEvent(
         settings.user_id,
