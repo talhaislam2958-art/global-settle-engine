@@ -186,12 +186,9 @@ export async function fetchOrders(creds: BinanceCreds): Promise<
     rows: 50,
   });
   if (!res.ok || (typeof res.body === "object" && res.body?.code && res.body.code !== "000000")) {
-    const msg =
-      typeof res.body === "object"
-        ? res.body?.msg || res.body?.message || JSON.stringify(res.body).slice(0, 300)
-        : String(res.body).slice(0, 300);
-    return { ok: false, message: `Binance order fetch failed [${res.status}]: ${msg}` };
+    return { ok: false, message: friendlyError(res, "Binance order fetch failed") };
   }
+
 
   const list: any[] = res.body?.data ?? [];
   const orders = list.map((o) => {
