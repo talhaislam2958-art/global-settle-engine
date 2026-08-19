@@ -68,6 +68,13 @@ export type BotStateSettings = {
   agent_online: boolean;
   agent_last_seen_at: string | null;
   agent_version: string | null;
+  poll_interval_seconds: number;
+  notify_new_order: boolean;
+  notify_paid: boolean;
+  notify_appeal: boolean;
+  notify_release: boolean;
+  notify_sms: boolean;
+  notify_ambiguity: boolean;
 };
 
 export type AutomationTaskRow = {
