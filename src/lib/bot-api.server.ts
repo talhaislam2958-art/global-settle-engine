@@ -63,6 +63,13 @@ export async function loadState(userId: string) {
       agent_online: agentOnline(s.agent_last_seen_at),
       agent_last_seen_at: s.agent_last_seen_at ?? null,
       agent_version: s.agent_version ?? null,
+      poll_interval_seconds: s.poll_interval_seconds ?? 60,
+      notify_new_order: s.notify_new_order ?? true,
+      notify_paid: s.notify_paid ?? true,
+      notify_appeal: s.notify_appeal ?? true,
+      notify_release: s.notify_release ?? true,
+      notify_sms: s.notify_sms ?? true,
+      notify_ambiguity: s.notify_ambiguity ?? true,
     },
     payment_methods: methods.data ?? [],
     orders: orders.data ?? [],
@@ -144,4 +151,26 @@ export async function removePaymentMethod(userId: string, id: string) {
   const { error } = await supabaseAdmin.from("payment_methods").delete().eq("user_id", userId).eq("id", id);
   if (error) throw new Error(error.message);
   return { ok: true };
+}
+
+/* --------------------- logs & SMS history management --------------------- */
+
+export async function clearSystemLogs(userId: string) {
+  const { error } = await supabaseAdmin.from("system_logs").delete().eq("user_id", userId);
+  if (error) throw new Error(error.message);
+  await logEvent(userId, "info", "logs_cleared", "System logs cleared from the dashboard.");
+  return { ok: true, message: "System logs cleared." };
+}
+
+export async function clearSmsHistory(userId: string) {
+  const { error } = await supabaseAdmin.from("sms_logs").delete().eq("user_id", userId);
+  if (error) throw new Error(error.message);
+  await logEvent(userId, "info", "sms_cleared", "SMS / webhook history purged from the dashboard.");
+  return { ok: true, message: "SMS history purged." };
+}
+
+export async function deleteSmsEntry(userId: string, id: string) {
+  const { error } = await supabaseAdmin.from("sms_logs").delete().eq("user_id", userId).eq("id", id);
+  if (error) throw new Error(error.message);
+  return { ok: true, message: "SMS entry deleted." };
 }
