@@ -15,6 +15,7 @@ export type OrderRow = {
   released_at: string | null;
   payment_verified: boolean;
   order_created_at: string | null;
+  match_ambiguous?: boolean;
   created_at: string;
 };
 
