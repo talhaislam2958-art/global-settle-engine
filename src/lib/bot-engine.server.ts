@@ -144,10 +144,22 @@ export async function syncOrdersForUser(settings: BotSettings) {
         `Order ${order.order_id} moved from ${prev} to ${order.status}`,
       );
       if (order.status === "appeal") {
-        await sendTelegram(
-          settings.telegram_bot_token,
-          settings.telegram_chat_id,
+        await notify(
+          settings,
+          "appeal",
           `⚠️ <b>Appeal opened</b>\nOrder: <code>${order.order_id}</code>\nBuyer: ${order.buyer_username ?? "-"}\nHandle this manually in Binance.`,
+        );
+      } else if (order.status === "paid") {
+        await notify(
+          settings,
+          "paid",
+          `💵 <b>Buyer marked as PAID</b>\nOrder: <code>${order.order_id}</code>\nBuyer: ${order.buyer_username ?? "-"}\nAmount: ${order.fiat_amount} ${order.fiat_currency}\nWaiting for payment SMS verification.`,
+        );
+      } else if (order.status === "completed") {
+        await notify(
+          settings,
+          "release",
+          `🏁 <b>Order completed</b>\nOrder: <code>${order.order_id}</code>\nBuyer: ${order.buyer_username ?? "-"}`,
         );
       }
     }
