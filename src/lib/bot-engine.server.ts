@@ -195,10 +195,10 @@ async function notifyNewOrder(
     )
     .join("\n");
 
-  await sendTelegram(
-    settings.telegram_bot_token,
-    settings.telegram_chat_id,
-    `🆕 <b>New ${status} order</b>\nOrder: <code>${orderId}</code>\nBuyer: ${buyer ?? "-"}\nAmount: ${amount} ${currency}\n\n<b>Send these payment details:</b>\n${details || "No payment methods configured."}`,
+  await notify(
+    settings,
+    "new_order",
+    `🆕 <b>New ${status === "ongoing" ? "pending" : status} order</b>\nOrder: <code>${orderId}</code>\nBuyer: ${buyer ?? "-"}\nAmount: ${amount} ${currency}\n\n<b>Send these payment details:</b>\n${details || "No payment methods configured."}`,
   );
 }
 
