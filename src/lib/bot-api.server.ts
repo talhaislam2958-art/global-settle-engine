@@ -152,3 +152,25 @@ export async function removePaymentMethod(userId: string, id: string) {
   if (error) throw new Error(error.message);
   return { ok: true };
 }
+
+/* --------------------- logs & SMS history management --------------------- */
+
+export async function clearSystemLogs(userId: string) {
+  const { error } = await supabaseAdmin.from("system_logs").delete().eq("user_id", userId);
+  if (error) throw new Error(error.message);
+  await logEvent(userId, "info", "logs_cleared", "System logs cleared from the dashboard.");
+  return { ok: true, message: "System logs cleared." };
+}
+
+export async function clearSmsHistory(userId: string) {
+  const { error } = await supabaseAdmin.from("sms_logs").delete().eq("user_id", userId);
+  if (error) throw new Error(error.message);
+  await logEvent(userId, "info", "sms_cleared", "SMS / webhook history purged from the dashboard.");
+  return { ok: true, message: "SMS history purged." };
+}
+
+export async function deleteSmsEntry(userId: string, id: string) {
+  const { error } = await supabaseAdmin.from("sms_logs").delete().eq("user_id", userId).eq("id", id);
+  if (error) throw new Error(error.message);
+  return { ok: true, message: "SMS entry deleted." };
+}

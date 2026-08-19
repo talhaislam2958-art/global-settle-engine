@@ -10,6 +10,13 @@ const settingsSchema = z.object({
   binance_api_secret: z.string().max(500).nullable().optional(),
   telegram_bot_token: z.string().max(500).nullable().optional(),
   telegram_chat_id: z.string().max(100).nullable().optional(),
+  poll_interval_seconds: z.number().int().min(2).max(300).optional(),
+  notify_new_order: z.boolean().optional(),
+  notify_paid: z.boolean().optional(),
+  notify_appeal: z.boolean().optional(),
+  notify_release: z.boolean().optional(),
+  notify_sms: z.boolean().optional(),
+  notify_ambiguity: z.boolean().optional(),
 });
 
 const methodSchema = z.object({
@@ -90,4 +97,26 @@ export const simulateSms = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { runSmsTest } = await import("./bot-api.server");
     return runSmsTest(context.userId, data.text);
+  });
+
+export const clearSystemLogsFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { clearSystemLogs } = await import("./bot-api.server");
+    return clearSystemLogs(context.userId);
+  });
+
+export const clearSmsHistoryFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { clearSmsHistory } = await import("./bot-api.server");
+    return clearSmsHistory(context.userId);
+  });
+
+export const deleteSmsEntryFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { deleteSmsEntry } = await import("./bot-api.server");
+    return deleteSmsEntry(context.userId, data.id);
   });
