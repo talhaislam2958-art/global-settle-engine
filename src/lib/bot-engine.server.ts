@@ -6,6 +6,14 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { fetchOrders, releaseOrder, type BinanceCreds } from "./binance.server";
 import { sendTelegram } from "./telegram.server";
 
+export type NotificationKind =
+  | "new_order"
+  | "paid"
+  | "appeal"
+  | "release"
+  | "sms"
+  | "ambiguity";
+
 export type BotSettings = {
   id: string;
   user_id: string;
@@ -17,7 +25,33 @@ export type BotSettings = {
   telegram_bot_token: string | null;
   telegram_chat_id: string | null;
   webhook_token: string;
+  poll_interval_seconds?: number | null;
+  notify_new_order?: boolean | null;
+  notify_paid?: boolean | null;
+  notify_appeal?: boolean | null;
+  notify_release?: boolean | null;
+  notify_sms?: boolean | null;
+  notify_ambiguity?: boolean | null;
 };
+
+const NOTIFY_FLAG: Record<NotificationKind, keyof BotSettings> = {
+  new_order: "notify_new_order",
+  paid: "notify_paid",
+  appeal: "notify_appeal",
+  release: "notify_release",
+  sms: "notify_sms",
+  ambiguity: "notify_ambiguity",
+};
+
+/**
+ * Telegram dispatch gated by the per-event toggles. Muting a category never
+ * changes background automation — it only suppresses the push message.
+ */
+export async function notify(settings: BotSettings, kind: NotificationKind, text: string) {
+  const enabled = settings[NOTIFY_FLAG[kind]];
+  if (enabled === false) return { ok: false, message: `Notification "${kind}" is muted.` };
+  return sendTelegram(settings.telegram_bot_token, settings.telegram_chat_id, text);
+}
 
 export async function logEvent(
   userId: string,
