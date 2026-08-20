@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Copy, KeyRound, Play, Power, RefreshCw, Send, ShieldCheck, Zap } from "lucide-react";
+import { BellRing, Copy, KeyRound, Play, Power, RefreshCw, Send, ShieldCheck, Timer, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
 import {
   Select,
   SelectContent,
@@ -17,6 +18,15 @@ import {
 import { COUNTRIES } from "@/lib/countries";
 import type { BotStateSettings } from "@/lib/types";
 import { saveSettings, syncOrders, testBinanceKeys, testTelegram } from "@/lib/bot.functions";
+
+const NOTIFY_TOGGLES = [
+  { key: "notify_new_order", label: "New order placed" },
+  { key: "notify_paid", label: "Order marked as paid" },
+  { key: "notify_appeal", label: "Appeal / dispute opened" },
+  { key: "notify_release", label: "USDT release alerts" },
+  { key: "notify_sms", label: "SMS / webhook received" },
+  { key: "notify_ambiguity", label: "Ambiguity warnings" },
+] as const satisfies ReadonlyArray<{ key: keyof BotStateSettings; label: string }>;
 
 export function ControlPanel({
   settings,
@@ -35,6 +45,7 @@ export function ControlPanel({
   const [tgToken, setTgToken] = useState("");
   const [tgChat, setTgChat] = useState(settings.telegram_chat_id ?? "");
   const [busy, setBusy] = useState<string | null>(null);
+  const [pollSecs, setPollSecs] = useState(settings.poll_interval_seconds ?? 60);
 
   const webhookUrl = `${typeof window === "undefined" ? "" : window.location.origin}/api/public/sms/webhook?token=${settings.webhook_token}`;
 
@@ -277,6 +288,89 @@ export function ControlPanel({
             POST JSON <span className="mono">{"{ text, sender, amount, reference, payer_name }"}</span> from
             MacroDroid or any SMS forwarder.
           </p>
+        </div>
+      </div>
+
+      {/* Polling + notification preferences */}
+      <div className="panel space-y-5 p-5 lg:col-span-3">
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Timer className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-semibold uppercase tracking-wider">Polling interval</h2>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              How often the cloud engine asks Binance for order updates. Lower is faster detection; keep it
+              at 2s or above to stay inside Binance rate limits.
+            </p>
+            <div className="flex items-center gap-4">
+              <Slider
+                className="flex-1"
+                min={2}
+                max={120}
+                step={1}
+                value={[pollSecs]}
+                disabled={busy !== null}
+                onValueChange={(v: number[]) => setPollSecs(v[0] ?? 60)}
+                onValueCommit={(v: number[]) =>
+                  run("interval", async () => {
+                    await save({ data: { poll_interval_seconds: v[0] ?? 60 } });
+                    toast.success(`Polling every ${v[0] ?? 60}s`);
+                  })
+                }
+              />
+              <span className="mono w-16 shrink-0 text-right text-sm font-semibold">{pollSecs}s</span>
+            </div>
+            <div className="flex gap-2">
+              {[2, 3, 4, 10, 30, 60].map((s) => (
+                <Button
+                  key={s}
+                  size="sm"
+                  variant={pollSecs === s ? "default" : "secondary"}
+                  disabled={busy !== null}
+                  onClick={() =>
+                    run("interval", async () => {
+                      setPollSecs(s);
+                      await save({ data: { poll_interval_seconds: s } });
+                      toast.success(`Polling every ${s}s`);
+                    })
+                  }
+                >
+                  {s}s
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <BellRing className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-semibold uppercase tracking-wider">Telegram notifications</h2>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Muting a category only stops the Telegram push — background automation keeps running.
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {NOTIFY_TOGGLES.map((t) => (
+                <div
+                  key={t.key}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-2 px-3 py-2"
+                >
+                  <span className="text-xs leading-snug">{t.label}</span>
+                  <Switch
+                    checked={settings[t.key] as boolean}
+                    disabled={busy !== null}
+                    onCheckedChange={(v) =>
+                      run(t.key, async () => {
+                        await save({ data: { [t.key]: v } });
+                        toast.success(`${t.label}: ${v ? "ON" : "OFF"}`);
+                      })
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>
