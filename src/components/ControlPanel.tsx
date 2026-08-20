@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Copy, KeyRound, Play, Power, RefreshCw, Send, ShieldCheck, Zap } from "lucide-react";
+import { BellRing, Copy, KeyRound, Play, Power, RefreshCw, Send, ShieldCheck, Timer, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
 import {
   Select,
   SelectContent,
@@ -17,6 +18,15 @@ import {
 import { COUNTRIES } from "@/lib/countries";
 import type { BotStateSettings } from "@/lib/types";
 import { saveSettings, syncOrders, testBinanceKeys, testTelegram } from "@/lib/bot.functions";
+
+const NOTIFY_TOGGLES = [
+  { key: "notify_new_order", label: "New order placed" },
+  { key: "notify_paid", label: "Order marked as paid" },
+  { key: "notify_appeal", label: "Appeal / dispute opened" },
+  { key: "notify_release", label: "USDT release alerts" },
+  { key: "notify_sms", label: "SMS / webhook received" },
+  { key: "notify_ambiguity", label: "Ambiguity warnings" },
+] as const satisfies ReadonlyArray<{ key: keyof BotStateSettings; label: string }>;
 
 export function ControlPanel({
   settings,
@@ -35,6 +45,7 @@ export function ControlPanel({
   const [tgToken, setTgToken] = useState("");
   const [tgChat, setTgChat] = useState(settings.telegram_chat_id ?? "");
   const [busy, setBusy] = useState<string | null>(null);
+  const [pollSecs, setPollSecs] = useState(settings.poll_interval_seconds ?? 60);
 
   const webhookUrl = `${typeof window === "undefined" ? "" : window.location.origin}/api/public/sms/webhook?token=${settings.webhook_token}`;
 
@@ -298,28 +309,28 @@ export function ControlPanel({
                 min={2}
                 max={120}
                 step={1}
-                value={[interval]}
+                value={[pollSecs]}
                 disabled={busy !== null}
-                onValueChange={(v) => setInterval(v[0] ?? 60)}
-                onValueCommit={(v) =>
+                onValueChange={(v: number[]) => setPollSecs(v[0] ?? 60)}
+                onValueCommit={(v: number[]) =>
                   run("interval", async () => {
                     await save({ data: { poll_interval_seconds: v[0] ?? 60 } });
                     toast.success(`Polling every ${v[0] ?? 60}s`);
                   })
                 }
               />
-              <span className="mono w-16 shrink-0 text-right text-sm font-semibold">{interval}s</span>
+              <span className="mono w-16 shrink-0 text-right text-sm font-semibold">{pollSecs}s</span>
             </div>
             <div className="flex gap-2">
               {[2, 3, 4, 10, 30, 60].map((s) => (
                 <Button
                   key={s}
                   size="sm"
-                  variant={interval === s ? "default" : "secondary"}
+                  variant={pollSecs === s ? "default" : "secondary"}
                   disabled={busy !== null}
                   onClick={() =>
                     run("interval", async () => {
-                      setInterval(s);
+                      setPollSecs(s);
                       await save({ data: { poll_interval_seconds: s } });
                       toast.success(`Polling every ${s}s`);
                     })
@@ -347,7 +358,7 @@ export function ControlPanel({
                 >
                   <span className="text-xs leading-snug">{t.label}</span>
                   <Switch
-                    checked={settings[t.key]}
+                    checked={settings[t.key] as boolean}
                     disabled={busy !== null}
                     onCheckedChange={(v) =>
                       run(t.key, async () => {

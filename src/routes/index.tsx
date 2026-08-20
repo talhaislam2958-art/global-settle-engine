@@ -130,7 +130,7 @@ function Dashboard() {
         />
       </div>
 
-      <LogsPanel logs={state.system_logs} />
+      <LogsPanel logs={state.system_logs} onChanged={refresh} />
 
     </main>
   );
