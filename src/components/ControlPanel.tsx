@@ -279,6 +279,89 @@ export function ControlPanel({
           </p>
         </div>
       </div>
+
+      {/* Polling + notification preferences */}
+      <div className="panel space-y-5 p-5 lg:col-span-3">
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Timer className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-semibold uppercase tracking-wider">Polling interval</h2>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              How often the cloud engine asks Binance for order updates. Lower is faster detection; keep it
+              at 2s or above to stay inside Binance rate limits.
+            </p>
+            <div className="flex items-center gap-4">
+              <Slider
+                className="flex-1"
+                min={2}
+                max={120}
+                step={1}
+                value={[interval]}
+                disabled={busy !== null}
+                onValueChange={(v) => setInterval(v[0] ?? 60)}
+                onValueCommit={(v) =>
+                  run("interval", async () => {
+                    await save({ data: { poll_interval_seconds: v[0] ?? 60 } });
+                    toast.success(`Polling every ${v[0] ?? 60}s`);
+                  })
+                }
+              />
+              <span className="mono w-16 shrink-0 text-right text-sm font-semibold">{interval}s</span>
+            </div>
+            <div className="flex gap-2">
+              {[2, 3, 4, 10, 30, 60].map((s) => (
+                <Button
+                  key={s}
+                  size="sm"
+                  variant={interval === s ? "default" : "secondary"}
+                  disabled={busy !== null}
+                  onClick={() =>
+                    run("interval", async () => {
+                      setInterval(s);
+                      await save({ data: { poll_interval_seconds: s } });
+                      toast.success(`Polling every ${s}s`);
+                    })
+                  }
+                >
+                  {s}s
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <BellRing className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-semibold uppercase tracking-wider">Telegram notifications</h2>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Muting a category only stops the Telegram push — background automation keeps running.
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {NOTIFY_TOGGLES.map((t) => (
+                <div
+                  key={t.key}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-2 px-3 py-2"
+                >
+                  <span className="text-xs leading-snug">{t.label}</span>
+                  <Switch
+                    checked={settings[t.key]}
+                    disabled={busy !== null}
+                    onCheckedChange={(v) =>
+                      run(t.key, async () => {
+                        await save({ data: { [t.key]: v } });
+                        toast.success(`${t.label}: ${v ? "ON" : "OFF"}`);
+                      })
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
