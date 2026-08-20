@@ -1,4 +1,10 @@
-import { Terminal } from "lucide-react";
+import { useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
+import { Terminal, Trash2 } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { clearSystemLogsFn } from "@/lib/bot.functions";
 import type { LogRow } from "@/lib/types";
 
 function tone(level: string) {
