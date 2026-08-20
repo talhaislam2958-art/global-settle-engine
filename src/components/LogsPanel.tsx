@@ -14,12 +14,35 @@ function tone(level: string) {
   return "text-muted-foreground";
 }
 
-export function LogsPanel({ logs }: { logs: LogRow[] }) {
+export function LogsPanel({ logs, onChanged }: { logs: LogRow[]; onChanged?: () => void }) {
+  const clear = useServerFn(clearSystemLogsFn);
+  const [busy, setBusy] = useState(false);
+
   return (
     <div className="panel p-5">
       <div className="mb-3 flex items-center gap-2">
         <Terminal className="h-4 w-4 text-primary" />
         <h2 className="text-sm font-semibold uppercase tracking-wider">System logs</h2>
+        <Button
+          size="sm"
+          variant="secondary"
+          className="ml-auto"
+          disabled={busy || logs.length === 0}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              const res = (await clear({})) as { message: string };
+              toast.success(res.message);
+            } catch (error) {
+              toast.error(error instanceof Error ? error.message : "Could not clear logs");
+            } finally {
+              setBusy(false);
+              onChanged?.();
+            }
+          }}
+        >
+          <Trash2 className="h-3.5 w-3.5" /> Clear logs
+        </Button>
       </div>
       <div className="max-h-[26rem] space-y-1 overflow-y-auto rounded-xl border border-border bg-surface-2 p-3">
         {logs.length === 0 ? (
