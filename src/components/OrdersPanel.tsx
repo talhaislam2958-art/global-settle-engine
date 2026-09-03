@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { AlertTriangle, BadgeCheck, CheckCircle2, Gavel, Hourglass, Send } from "lucide-react";
+import { BadgeCheck, Gavel, Hourglass, Send } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,14 +10,10 @@ import { releaseUsdt } from "@/lib/bot.functions";
 import type { OrderRow } from "@/lib/types";
 
 const TABS = [
-  { key: "pending", label: "Pending", icon: Hourglass, statuses: ["ongoing", "pending"] },
-  { key: "paid", label: "Paid", icon: BadgeCheck, statuses: ["paid"] },
-  { key: "appeal", label: "Appeals", icon: Gavel, statuses: ["appeal"] },
-  { key: "completed", label: "Completed", icon: CheckCircle2, statuses: ["completed", "cancelled"] },
+  { key: "ongoing", label: "Ongoing", icon: Hourglass },
+  { key: "paid", label: "Paid", icon: BadgeCheck },
+  { key: "appeal", label: "Appeal", icon: Gavel },
 ] as const;
-
-const inTab = (order: OrderRow, statuses: readonly string[]) =>
-  statuses.includes(order.status) || (statuses.includes("completed") && order.released);
 
 function OrderCard({ order, onChanged }: { order: OrderRow; onChanged: () => void }) {
   const release = useServerFn(releaseUsdt);
@@ -53,11 +49,6 @@ function OrderCard({ order, onChanged }: { order: OrderRow; onChanged: () => voi
         {order.payment_verified ? <Badge>payment verified</Badge> : null}
         {order.released ? <Badge variant="outline">released</Badge> : null}
         {order.trade_type ? <Badge variant="outline">{order.trade_type}</Badge> : null}
-        {order.match_ambiguous ? (
-          <Badge variant="destructive" className="gap-1">
-            <AlertTriangle className="h-3 w-3" /> needs review
-          </Badge>
-        ) : null}
         <span className="mono text-xs text-muted-foreground">
           {new Date(order.order_created_at ?? order.created_at).toLocaleString()}
         </span>
@@ -94,20 +85,20 @@ export function OrdersPanel({ orders, onChanged }: { orders: OrderRow[]; onChang
   return (
     <div className="panel p-5">
       <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider">Orders</h2>
-      <Tabs defaultValue="pending">
+      <Tabs defaultValue="ongoing">
         <TabsList className="w-full">
           {TABS.map((t) => (
             <TabsTrigger key={t.key} value={t.key} className="flex-1 gap-1.5">
               <t.icon className="h-3.5 w-3.5" />
               {t.label}
               <span className="mono text-xs opacity-70">
-                {orders.filter((o) => inTab(o, t.statuses)).length}
+                {orders.filter((o) => o.status === t.key).length}
               </span>
             </TabsTrigger>
           ))}
         </TabsList>
         {TABS.map((t) => {
-          const list = orders.filter((o) => inTab(o, t.statuses));
+          const list = orders.filter((o) => o.status === t.key);
           return (
             <TabsContent key={t.key} value={t.key} className="mt-4 space-y-3">
               {list.length === 0 ? (

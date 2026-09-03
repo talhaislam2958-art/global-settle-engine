@@ -23,28 +23,10 @@ export const Route = createFileRoute("/api/public/hooks/poll-orders")({
           .eq("bot_running", true)
           .not("binance_api_key", "is", null);
 
-        // The scheduler wakes us once a minute. Each user's configurable poll
-        // interval decides how many times we re-sync within that window, so
-        // detection can be as fast as a few seconds without extra cron jobs.
-        const WINDOW_MS = 55_000;
-        const startedAt = Date.now();
-        const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-        const results: Array<{ user_id: string; ok: boolean; message: string; passes: number }> = [];
+        const results: Array<{ user_id: string; ok: boolean; message: string }> = [];
         for (const settings of active ?? []) {
-          const interval = Math.min(
-            300,
-            Math.max(2, Number((settings as { poll_interval_seconds?: number }).poll_interval_seconds ?? 60)),
-          );
-          let passes = 0;
-          let last = { ok: false, message: "" } as { ok: boolean; message?: string };
-          do {
-            last = await syncOrdersForUser(settings as never);
-            passes += 1;
-            if (Date.now() - startedAt + interval * 1000 >= WINDOW_MS) break;
-            await sleep(interval * 1000);
-          } while (Date.now() - startedAt < WINDOW_MS);
-          results.push({ user_id: settings.user_id, ok: last.ok, message: last.message ?? "", passes });
+          const res = await syncOrdersForUser(settings as never);
+          results.push({ user_id: settings.user_id, ok: res.ok, message: res.message ?? "" });
         }
 
         return new Response(JSON.stringify({ ok: true, processed: results.length, results }), {

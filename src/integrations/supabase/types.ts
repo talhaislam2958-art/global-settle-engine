@@ -73,13 +73,6 @@ export type Database = {
           id: string
           last_poll_at: string | null
           last_poll_status: string | null
-          notify_ambiguity: boolean
-          notify_appeal: boolean
-          notify_new_order: boolean
-          notify_paid: boolean
-          notify_release: boolean
-          notify_sms: boolean
-          poll_interval_seconds: number
           telegram_bot_token: string | null
           telegram_chat_id: string | null
           updated_at: string
@@ -99,13 +92,6 @@ export type Database = {
           id?: string
           last_poll_at?: string | null
           last_poll_status?: string | null
-          notify_ambiguity?: boolean
-          notify_appeal?: boolean
-          notify_new_order?: boolean
-          notify_paid?: boolean
-          notify_release?: boolean
-          notify_sms?: boolean
-          poll_interval_seconds?: number
           telegram_bot_token?: string | null
           telegram_chat_id?: string | null
           updated_at?: string
@@ -125,13 +111,6 @@ export type Database = {
           id?: string
           last_poll_at?: string | null
           last_poll_status?: string | null
-          notify_ambiguity?: boolean
-          notify_appeal?: boolean
-          notify_new_order?: boolean
-          notify_paid?: boolean
-          notify_release?: boolean
-          notify_sms?: boolean
-          poll_interval_seconds?: number
           telegram_bot_token?: string | null
           telegram_chat_id?: string | null
           updated_at?: string
@@ -150,7 +129,6 @@ export type Database = {
           fiat_amount: number
           fiat_currency: string
           id: string
-          match_ambiguous: boolean
           order_created_at: string | null
           order_id: string
           payment_method: string | null
@@ -173,7 +151,6 @@ export type Database = {
           fiat_amount?: number
           fiat_currency?: string
           id?: string
-          match_ambiguous?: boolean
           order_created_at?: string | null
           order_id: string
           payment_method?: string | null
@@ -196,7 +173,6 @@ export type Database = {
           fiat_amount?: number
           fiat_currency?: string
           id?: string
-          match_ambiguous?: boolean
           order_created_at?: string | null
           order_id?: string
           payment_method?: string | null

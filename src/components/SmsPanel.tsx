@@ -1,25 +1,22 @@
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { MessageSquareText, TestTube, Trash2, X } from "lucide-react";
+import { MessageSquareText, TestTube } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { clearSmsHistoryFn, deleteSmsEntryFn, simulateSms } from "@/lib/bot.functions";
+import { simulateSms } from "@/lib/bot.functions";
 import type { SmsRow } from "@/lib/types";
 
 function statusVariant(status: string) {
   if (status === "released") return "default" as const;
   if (status === "matched") return "secondary" as const;
-  if (status === "ambiguous") return "destructive" as const;
   return "outline" as const;
 }
 
 export function SmsPanel({ logs, onChanged }: { logs: SmsRow[]; onChanged: () => void }) {
   const test = useServerFn(simulateSms);
-  const purge = useServerFn(clearSmsHistoryFn);
-  const removeEntry = useServerFn(deleteSmsEntryFn);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -28,26 +25,6 @@ export function SmsPanel({ logs, onChanged }: { logs: SmsRow[]; onChanged: () =>
       <div className="flex items-center gap-2">
         <MessageSquareText className="h-4 w-4 text-primary" />
         <h2 className="text-sm font-semibold uppercase tracking-wider">SMS logs &amp; verification</h2>
-        <Button
-          size="sm"
-          variant="secondary"
-          className="ml-auto"
-          disabled={busy || logs.length === 0}
-          onClick={async () => {
-            setBusy(true);
-            try {
-              const res = (await purge({})) as { message: string };
-              toast.success(res.message);
-            } catch (error) {
-              toast.error(error instanceof Error ? error.message : "Could not purge history");
-            } finally {
-              setBusy(false);
-              onChanged();
-            }
-          }}
-        >
-          <Trash2 className="h-3.5 w-3.5" /> Purge history
-        </Button>
       </div>
 
       <div className="space-y-2 rounded-xl border border-border bg-surface-2 p-3">
@@ -100,24 +77,6 @@ export function SmsPanel({ logs, onChanged }: { logs: SmsRow[]; onChanged: () =>
                 <span className="mono ml-auto text-xs text-muted-foreground">
                   {new Date(s.created_at).toLocaleString()}
                 </span>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-6 w-6"
-                  aria-label="Delete SMS entry"
-                  onClick={async () => {
-                    try {
-                      await removeEntry({ data: { id: s.id } });
-                      toast.success("Entry deleted");
-                    } catch (error) {
-                      toast.error(error instanceof Error ? error.message : "Delete failed");
-                    } finally {
-                      onChanged();
-                    }
-                  }}
-                >
-                  <X className="h-3.5 w-3.5" />
-                </Button>
               </div>
               <p className="mt-2 text-sm leading-relaxed text-foreground/90">{s.raw_text}</p>
               <div className="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">

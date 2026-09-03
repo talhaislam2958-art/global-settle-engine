@@ -6,14 +6,6 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { fetchOrders, releaseOrder, type BinanceCreds } from "./binance.server";
 import { sendTelegram } from "./telegram.server";
 
-export type NotificationKind =
-  | "new_order"
-  | "paid"
-  | "appeal"
-  | "release"
-  | "sms"
-  | "ambiguity";
-
 export type BotSettings = {
   id: string;
   user_id: string;
@@ -25,33 +17,7 @@ export type BotSettings = {
   telegram_bot_token: string | null;
   telegram_chat_id: string | null;
   webhook_token: string;
-  poll_interval_seconds?: number | null;
-  notify_new_order?: boolean | null;
-  notify_paid?: boolean | null;
-  notify_appeal?: boolean | null;
-  notify_release?: boolean | null;
-  notify_sms?: boolean | null;
-  notify_ambiguity?: boolean | null;
 };
-
-const NOTIFY_FLAG: Record<NotificationKind, keyof BotSettings> = {
-  new_order: "notify_new_order",
-  paid: "notify_paid",
-  appeal: "notify_appeal",
-  release: "notify_release",
-  sms: "notify_sms",
-  ambiguity: "notify_ambiguity",
-};
-
-/**
- * Telegram dispatch gated by the per-event toggles. Muting a category never
- * changes background automation — it only suppresses the push message.
- */
-export async function notify(settings: BotSettings, kind: NotificationKind, text: string) {
-  const enabled = settings[NOTIFY_FLAG[kind]];
-  if (enabled === false) return { ok: false, message: `Notification "${kind}" is muted.` };
-  return sendTelegram(settings.telegram_bot_token, settings.telegram_chat_id, text);
-}
 
 export async function logEvent(
   userId: string,
@@ -144,22 +110,10 @@ export async function syncOrdersForUser(settings: BotSettings) {
         `Order ${order.order_id} moved from ${prev} to ${order.status}`,
       );
       if (order.status === "appeal") {
-        await notify(
-          settings,
-          "appeal",
+        await sendTelegram(
+          settings.telegram_bot_token,
+          settings.telegram_chat_id,
           `⚠️ <b>Appeal opened</b>\nOrder: <code>${order.order_id}</code>\nBuyer: ${order.buyer_username ?? "-"}\nHandle this manually in Binance.`,
-        );
-      } else if (order.status === "paid") {
-        await notify(
-          settings,
-          "paid",
-          `💵 <b>Buyer marked as PAID</b>\nOrder: <code>${order.order_id}</code>\nBuyer: ${order.buyer_username ?? "-"}\nAmount: ${order.fiat_amount} ${order.fiat_currency}\nWaiting for payment SMS verification.`,
-        );
-      } else if (order.status === "completed") {
-        await notify(
-          settings,
-          "release",
-          `🏁 <b>Order completed</b>\nOrder: <code>${order.order_id}</code>\nBuyer: ${order.buyer_username ?? "-"}`,
         );
       }
     }
@@ -195,10 +149,10 @@ async function notifyNewOrder(
     )
     .join("\n");
 
-  await notify(
-    settings,
-    "new_order",
-    `🆕 <b>New ${status === "ongoing" ? "pending" : status} order</b>\nOrder: <code>${orderId}</code>\nBuyer: ${buyer ?? "-"}\nAmount: ${amount} ${currency}\n\n<b>Send these payment details:</b>\n${details || "No payment methods configured."}`,
+  await sendTelegram(
+    settings.telegram_bot_token,
+    settings.telegram_chat_id,
+    `🆕 <b>New ${status} order</b>\nOrder: <code>${orderId}</code>\nBuyer: ${buyer ?? "-"}\nAmount: ${amount} ${currency}\n\n<b>Send these payment details:</b>\n${details || "No payment methods configured."}`,
   );
 }
 
@@ -240,72 +194,9 @@ export function nameSimilarity(a: string, b: string): number {
   return hits / Math.min(at.size, bt.size);
 }
 
-const MATCH_WINDOW_HOURS = 24;
-
-type Candidate = {
-  id: string;
-  order_id: string;
-  status: string;
-  buyer_username: string | null;
-  buyer_real_name: string | null;
-  fiat_amount: number | string;
-  fiat_currency: string;
-  order_created_at: string | null;
-  created_at: string;
-};
-
-type Scored = { order: Candidate; score: number; reasons: string[] };
-
 /**
- * Multi-factor confidence score for one candidate order.
- * Exact fiat amount (incl. decimals) is mandatory; a transaction reference,
- * a valid time window and a fuzzy name/account match add confidence.
- */
-function scoreCandidate(
-  order: Candidate,
-  ctx: { amount: number; reference: string | null; payerName: string | null; rawText: string },
-): Scored {
-  const reasons: string[] = ["exact amount"];
-  let score = 0.5;
-
-  const placed = new Date(order.order_created_at ?? order.created_at).getTime();
-  const ageHours = (Date.now() - placed) / 3_600_000;
-  if (ageHours <= MATCH_WINDOW_HOURS) {
-    score += 0.15;
-    reasons.push("within time window");
-  } else {
-    score -= 0.3;
-    reasons.push("outside time window");
-  }
-
-  const haystack = ctx.rawText.toLowerCase();
-  if (ctx.reference && haystack.includes(ctx.reference.toLowerCase())) {
-    score += 0.1;
-    reasons.push("reference present");
-  }
-
-  const nameTarget = order.buyer_real_name ?? order.buyer_username ?? "";
-  if (ctx.payerName && nameTarget) {
-    const sim = nameSimilarity(ctx.payerName, nameTarget);
-    if (sim >= 0.8) {
-      score += 0.35;
-      reasons.push("name match");
-    } else if (sim >= 0.5) {
-      score += 0.2;
-      reasons.push("partial name match");
-    } else {
-      score -= 0.2;
-      reasons.push("name mismatch");
-    }
-  }
-
-  return { order, score: Math.max(0, Math.min(1, score)), reasons };
-}
-
-/**
- * Matches an incoming payment SMS against pending Binance orders. Requires a
- * single high-confidence candidate: if two or more simultaneous orders remain
- * plausible, automation is paused and an urgent Telegram warning is sent.
+ * Matches an incoming payment SMS against pending Binance orders on exact fiat
+ * amount, then disambiguates simultaneous orders using the buyer's legal name.
  */
 export async function processIncomingSms(
   settings: BotSettings,
@@ -317,11 +208,6 @@ export async function processIncomingSms(
   const payerName = input.payerName ?? parsed.payerName;
 
   await logEvent(settings.user_id, "info", "webhook_hit", `Payment SMS received${amount ? ` for ${amount}` : ""}${reference ? ` (ref ${reference})` : ""}`);
-  await notify(
-    settings,
-    "sms",
-    `📩 <b>Payment SMS received</b>\nAmount: ${amount ?? "?"}\nFrom: ${payerName ?? input.sender ?? "-"}${reference ? `\nRef: <code>${reference}</code>` : ""}`,
-  );
 
   const { data: candidates } = await supabaseAdmin
     .from("orders")
@@ -330,66 +216,35 @@ export async function processIncomingSms(
     .in("status", ["ongoing", "paid"])
     .eq("released", false);
 
-  const pool = ((candidates ?? []) as unknown as Candidate[]).filter(
-    (o) => amount != null && Math.abs(Number(o.fiat_amount) - amount) < 0.01,
-  );
+  let matched: (typeof candidates extends (infer T)[] | null ? T : never) | null = null;
+  const pool = (candidates ?? []).filter((o) => amount != null && Math.abs(Number(o.fiat_amount) - amount) < 0.01);
 
-  const scored: Scored[] = amount == null
-    ? []
-    : pool
-        .map((o) => scoreCandidate(o, { amount, reference, payerName, rawText: input.rawText }))
-        .sort((a, b) => b.score - a.score);
+  if (pool.length === 1) {
+    matched = pool[0]!;
+  } else if (pool.length > 1 && payerName) {
+    const scored = pool
+      .map((o) => ({ o, score: nameSimilarity(payerName, o.buyer_real_name ?? o.buyer_username ?? "") }))
+      .sort((a, b) => b.score - a.score);
+    if (scored[0] && scored[0].score >= 0.5 && (!scored[1] || scored[1].score < scored[0].score)) {
+      matched = scored[0].o;
+    }
+  }
 
-  const best = scored[0];
-  const runnerUp = scored[1];
-  // 100% confidence gate: the top candidate must be strong AND clearly ahead.
-  const confident =
-    Boolean(best) && best!.score >= 0.85 && (!runnerUp || best!.score - runnerUp.score >= 0.2);
-  const ambiguous = scored.length > 1 && !confident;
-
-  let matched: Candidate | null = confident ? best!.order : null;
   let matchStatus = "unmatched";
   let actionTaken: string | null = null;
 
-  if (ambiguous) {
-    matchStatus = "ambiguous";
-    actionTaken = "paused — manual intervention required";
-    const list = scored
-      .slice(0, 5)
-      .map((s) => `• <code>${s.order.order_id}</code> ${s.order.buyer_username ?? "-"} (${Math.round(s.score * 100)}%)`)
-      .join("\n");
-    await supabaseAdmin
-      .from("orders")
-      .update({ match_ambiguous: true })
-      .in("id", scored.map((s) => s.order.id));
-    await logEvent(
-      settings.user_id,
-      "warning",
-      "sms_ambiguous",
-      `Ambiguous payment of ${amount}: ${scored.length} possible orders — automation paused.`,
-      { candidates: scored.map((s) => ({ order_id: s.order.order_id, score: s.score, reasons: s.reasons })) },
-    );
-    await notify(
-      settings,
-      "ambiguity",
-      `🚨 <b>MANUAL INTERVENTION NEEDED</b>\nA payment of ${amount} could not be matched to one specific order with full confidence. No USDT was released.\n\nPossible orders:\n${list}\n\nPlease verify and act manually in Binance.`,
-    );
-  } else if (matched) {
+  if (matched) {
     matchStatus = "matched";
     await supabaseAdmin
       .from("orders")
-      .update({
-        payment_verified: true,
-        match_ambiguous: false,
-        status: matched.status === "ongoing" ? "paid" : matched.status,
-      })
+      .update({ payment_verified: true, status: matched.status === "ongoing" ? "paid" : matched.status })
       .eq("id", matched.id);
 
     await logEvent(
       settings.user_id,
       "success",
       "sms_matched",
-      `Payment of ${amount} matched to order ${matched.order_id} (buyer ${matched.buyer_username ?? "-"}) — confidence ${Math.round(best!.score * 100)}% [${best!.reasons.join(", ")}]`,
+      `Payment of ${amount} matched to order ${matched.order_id} (buyer ${matched.buyer_username ?? "-"})`,
     );
 
     if (settings.auto_release) {
@@ -407,9 +262,9 @@ export async function processIncomingSms(
             .update({ released: true, released_at: new Date().toISOString(), status: "completed" })
             .eq("id", matched.id);
           await logEvent(settings.user_id, "success", "release", `USDT auto-released for order ${matched.order_id}`);
-          await notify(
-            settings,
-            "release",
+          await sendTelegram(
+            settings.telegram_bot_token,
+            settings.telegram_chat_id,
             `✅ <b>USDT released automatically</b>\nOrder: <code>${matched.order_id}</code>\nBuyer: ${matched.buyer_username ?? "-"}\nAmount: ${matched.fiat_amount} ${matched.fiat_currency}`,
           );
         } else {
@@ -426,18 +281,18 @@ export async function processIncomingSms(
             "release",
             `API release unavailable (${rel.message}) — queued browser automation for order ${matched.order_id}.`,
           );
-          await notify(
-            settings,
-            "release",
+          await sendTelegram(
+            settings.telegram_bot_token,
+            settings.telegram_chat_id,
             `⚠️ <b>API release blocked — using browser agent</b>\nOrder: <code>${matched.order_id}</code>\n${rel.message}\nIf the agent is offline, release manually.`,
           );
         }
       }
     } else {
       actionTaken = "manual release required";
-      await notify(
-        settings,
-        "release",
+      await sendTelegram(
+        settings.telegram_bot_token,
+        settings.telegram_chat_id,
         `💰 <b>Payment confirmed for Order ${matched.order_id}. Please release USDT manually.</b>\nBuyer: ${matched.buyer_username ?? "-"}\nAmount: ${matched.fiat_amount} ${matched.fiat_currency}`,
       );
 
@@ -450,9 +305,9 @@ export async function processIncomingSms(
       "sms_unmatched",
       `No pending order matched this payment${amount ? ` of ${amount}` : ""}`,
     );
-    await notify(
-      settings,
-      "ambiguity",
+    await sendTelegram(
+      settings.telegram_bot_token,
+      settings.telegram_chat_id,
       `⚠️ <b>Unmatched payment SMS</b>\nAmount: ${amount ?? "?"}\nFrom: ${payerName ?? input.sender ?? "-"}\nNo matching pending order was found.`,
     );
   }
